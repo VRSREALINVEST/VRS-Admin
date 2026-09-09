@@ -124,7 +124,7 @@ export default function AdminDashboard() {
           </Link>
 
           <Link
-            href="/dashboard/messages"
+            href="/dashboard/enquiries"
             className="bg-gray-50 border border-gray-200 rounded-xl p-6 hover:bg-yellow-50 transition"
           >
             View Enquiries

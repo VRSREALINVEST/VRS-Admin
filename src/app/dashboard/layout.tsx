@@ -12,7 +12,10 @@ import {
   Video,
   MessageSquare,
   FileText,
+  Mail,
 } from "lucide-react";
+import EnquiryRealtimeProvider from "@/components/EnquiryRealtimeProvider";
+import DashboardNavbar from "@/components/DashboardNavbar";
 
 export default function DashboardLayout({
   children,
@@ -50,6 +53,7 @@ export default function DashboardLayout({
     }`;
 
   return (
+    <EnquiryRealtimeProvider>
     <div className="flex bg-gray-100">
       {/* ================= SIDEBAR ================= */}
       <aside className="w-72 h-screen sticky top-0 bg-black text-white flex flex-col justify-between px-6 py-8 shadow-xl">
@@ -67,6 +71,14 @@ export default function DashboardLayout({
             <Link href="/dashboard" className={menuItemClass("/dashboard")}>
               <LayoutDashboard size={18} />
               Dashboard
+            </Link>
+
+            <Link
+              href="/dashboard/enquiries"
+              className={menuItemClass("/dashboard/enquiries")}
+            >
+              <Mail size={18} />
+              Enquiries
             </Link>
 
             <Link
@@ -145,12 +157,17 @@ export default function DashboardLayout({
         </button>
       </aside>
 
-      {/* ================= MAIN CONTENT ================= */}
-      <main className="flex-1 p-8 overflow-y-auto">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 min-h-screen">
-          {children}
-        </div>
-      </main>
+      {/* ================= MAIN COLUMN ================= */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <DashboardNavbar onLogout={handleLogout} />
+
+        <main className="flex-1 p-8 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 min-h-screen">
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
+    </EnquiryRealtimeProvider>
   );
 }

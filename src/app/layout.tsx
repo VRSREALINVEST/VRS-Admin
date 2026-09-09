@@ -53,6 +53,9 @@ export default function RootLayout({
         <Toaster
           position="top-right"
           reverseOrder={false}
+          // Cleared below the dashboard navbar: toasts land top-right, which is
+          // exactly where the notification bell sits, and were covering it.
+          containerStyle={{ top: 88 }}
           toastOptions={{
             style: {
               borderRadius: "12px",
