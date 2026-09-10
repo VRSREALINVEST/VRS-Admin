@@ -83,6 +83,7 @@ export default function AdminEnquiries() {
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
@@ -110,7 +111,7 @@ export default function AdminEnquiries() {
   const dateError =
     from && to && from > to ? "From date cannot be after To date." : "";
 
-  const hasFilters = Boolean(search.trim() || from || to);
+  const hasFilters = Boolean(search.trim() || status || from || to);
 
   const fetchEnquiries = useCallback(async () => {
     if (!API || dateError) return;
@@ -123,6 +124,7 @@ export default function AdminEnquiries() {
       // the browser.
       const params = new URLSearchParams();
       if (search.trim()) params.set("search", search.trim());
+      if (status) params.set("status", status);
       if (from) params.set("from", from);
       if (to) params.set("to", to);
 
@@ -144,7 +146,7 @@ export default function AdminEnquiries() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [API, search, from, to, dateError]);
+  }, [API, search, status, from, to, dateError]);
 
   // The cards describe the whole database, so they are fetched independently
   // of the list's search and date filters and are never refetched while typing.
@@ -175,6 +177,7 @@ export default function AdminEnquiries() {
 
   const clearFilters = () => {
     setSearch("");
+    setStatus("");
     setFrom("");
     setTo("");
   };
@@ -192,6 +195,8 @@ export default function AdminEnquiries() {
         if (!haystack.includes(term)) return false;
       }
 
+      if (status && enquiry.status !== status) return false;
+
       // Compare on the business-timezone calendar day, matching the server, so
       // the To date stays inclusive and a late-evening enquiry is not pushed
       // into the next day by the viewer's own timezone.
@@ -203,7 +208,7 @@ export default function AdminEnquiries() {
 
       return true;
     },
-    [search, from, to, stats?.timezone],
+    [search, status, from, to, stats?.timezone],
   );
 
   useEffect(() => {
@@ -350,7 +355,7 @@ export default function AdminEnquiries() {
       </div>
 
       {/* ================= FILTERS ================= */}
-      <div className="grid gap-4 md:grid-cols-4 mb-2">
+      <div className="grid gap-4 md:grid-cols-5 mb-2">
         <div className="md:col-span-2">
           <label
             htmlFor="enquiry-search"
@@ -371,6 +376,26 @@ export default function AdminEnquiries() {
               className="w-full border border-gray-300 focus:border-black focus:ring-2 focus:ring-black rounded-xl py-3 pl-11 pr-4 outline-none"
             />
           </div>
+        </div>
+
+        <div>
+          <label
+            htmlFor="enquiry-status"
+            className="mb-2 block text-xs font-medium text-gray-500"
+          >
+            Status
+          </label>
+          <select
+            id="enquiry-status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="w-full border border-gray-300 focus:border-black focus:ring-2 focus:ring-black rounded-xl py-3 px-4 outline-none text-gray-800"
+          >
+            <option value="">All statuses</option>
+            <option value="New">New</option>
+            <option value="Contacted">Contacted</option>
+            <option value="Closed">Closed</option>
+          </select>
         </div>
 
         <div>
