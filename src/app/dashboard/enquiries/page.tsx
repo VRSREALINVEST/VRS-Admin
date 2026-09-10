@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
-import { Mail, Phone, Search, X, Inbox, Trash2 } from "lucide-react";
+import {
+  Mail,
+  Phone,
+  Search,
+  X,
+  Inbox,
+  Trash2,
+  CalendarDays,
+  CalendarRange,
+  CalendarClock,
+  RotateCcw,
+} from "lucide-react";
 import {
   useEnquiryRealtime,
   type Enquiry,
@@ -12,27 +23,57 @@ import {
 
 const STATUSES: EnquiryStatus[] = ["New", "Contacted", "Closed"];
 
+interface EnquiryStats {
+  today: number;
+  last7Days: number;
+  lastMonth: number;
+  total: number;
+  timezone: string;
+}
+
 const statusClass: Record<EnquiryStatus, string> = {
   New: "bg-yellow-100 text-yellow-700 border-yellow-200",
   Contacted: "bg-blue-100 text-blue-700 border-blue-200",
   Closed: "bg-gray-100 text-gray-600 border-gray-200",
 };
 
-const formatDate = (value: string) =>
+// The statistics and the date filters are resolved in the business timezone on
+// the server, so the dates shown here must use it too. Rendering in the
+// browser's zone made an enquiry submitted at 00:30 on 1 August in Sydney read
+// as "31 July", disagreeing with the Last Month card that counted it.
+// The server reports its own zone in the stats response; this is the fallback.
+const APP_TIMEZONE = "Australia/Sydney";
+
+const formatDate = (value: string, timeZone: string = APP_TIMEZONE) =>
   new Date(value).toLocaleDateString("en-AU", {
+    timeZone,
     day: "2-digit",
     month: "short",
     year: "numeric",
   });
 
-const formatDateTime = (value: string) =>
+const formatDateTime = (value: string, timeZone: string = APP_TIMEZONE) =>
   new Date(value).toLocaleString("en-AU", {
+    timeZone,
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
+
+/** The calendar day an instant falls on, in the business timezone. */
+const zonedDay = (value: string, timeZone: string = APP_TIMEZONE) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  // en-CA formats as YYYY-MM-DD, which compares correctly as a string.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+};
 
 export default function AdminEnquiries() {
   const API = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -42,8 +83,11 @@ export default function AdminEnquiries() {
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [sort, setSort] = useState<"newest" | "oldest">("newest");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  const [stats, setStats] = useState<EnquiryStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   const [selected, setSelected] = useState<Enquiry | null>(null);
   const [updating, setUpdating] = useState(false);
@@ -62,12 +106,31 @@ export default function AdminEnquiries() {
     },
   });
 
-  const fetchEnquiries = async () => {
+  // A range that runs backwards is rejected here so no invalid query is sent.
+  const dateError =
+    from && to && from > to ? "From date cannot be after To date." : "";
+
+  const hasFilters = Boolean(search.trim() || from || to);
+
+  const fetchEnquiries = useCallback(async () => {
+    if (!API || dateError) return;
+
     try {
       setLoading(true);
       setError("");
 
-      const res = await axios.get(`${API}/api/enquiries`, authHeader());
+      // Filtering happens in MongoDB, not over a full collection pulled into
+      // the browser.
+      const params = new URLSearchParams();
+      if (search.trim()) params.set("search", search.trim());
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+
+      const query = params.toString();
+      const res = await axios.get(
+        `${API}/api/enquiries${query ? `?${query}` : ""}`,
+        authHeader(),
+      );
       setEnquiries(res.data);
     } catch (err) {
       const status = axios.isAxiosError(err) ? err.response?.status : undefined;
@@ -80,16 +143,69 @@ export default function AdminEnquiries() {
     } finally {
       setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [API, search, from, to, dateError]);
 
-  useEffect(() => {
-    if (API) fetchEnquiries();
+  // The cards describe the whole database, so they are fetched independently
+  // of the list's search and date filters and are never refetched while typing.
+  const fetchStats = useCallback(async () => {
+    if (!API) return;
+
+    try {
+      setStatsLoading(true);
+      const res = await axios.get(`${API}/api/enquiries/stats`, authHeader());
+      setStats(res.data);
+    } catch {
+      setStats(null);
+    } finally {
+      setStatsLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [API]);
 
-  // Enquiries pushed over the socket are merged into the same array the REST
-  // fetch populates, so `visible` re-applies search, status filter and sort
-  // without a refetch. Guarded by _id because a socket event can race the
-  // initial fetch, or arrive again after a reconnect.
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  // Debounced so a keystroke does not fire a request per character.
+  useEffect(() => {
+    const timer = setTimeout(fetchEnquiries, 350);
+    return () => clearTimeout(timer);
+  }, [fetchEnquiries]);
+
+  const clearFilters = () => {
+    setSearch("");
+    setFrom("");
+    setTo("");
+  };
+
+  // The server already applied search and the date range, so a live arrival is
+  // only prepended when it would have matched that same query. Without this a
+  // new enquiry could appear inside a filtered view it does not belong to.
+  const matchesFilters = useCallback(
+    (enquiry: Enquiry) => {
+      const term = search.trim().toLowerCase();
+      if (term) {
+        const haystack = [enquiry.name, enquiry.email, enquiry.phone]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+
+      // Compare on the business-timezone calendar day, matching the server, so
+      // the To date stays inclusive and a late-evening enquiry is not pushed
+      // into the next day by the viewer's own timezone.
+      const day = zonedDay(enquiry.createdAt, stats?.timezone);
+      if (!day) return true;
+
+      if (from && day < from) return false;
+      if (to && day > to) return false;
+
+      return true;
+    },
+    [search, from, to, stats?.timezone],
+  );
+
   useEffect(() => {
     if (liveEnquiries.length === 0) return;
 
@@ -97,36 +213,27 @@ export default function AdminEnquiries() {
       const known = new Set(prev.map((enquiry) => enquiry._id));
       const fresh = liveEnquiries.filter(
         (enquiry) =>
-          !known.has(enquiry._id) && !removedIds.current.has(enquiry._id)
+          !known.has(enquiry._id) &&
+          !removedIds.current.has(enquiry._id) &&
+          matchesFilters(enquiry),
       );
 
       return fresh.length > 0 ? [...fresh, ...prev] : prev;
     });
-  }, [liveEnquiries]);
 
-  // ponytail: filtered in the browser over the full list, which matches the
-  // other dashboard pages. Move to query params on the API once this grows
-  // past a few thousand enquiries.
-  const visible = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    // A new enquiry changes today's and the total counts.
+    fetchStats();
+  }, [liveEnquiries, matchesFilters, fetchStats]);
 
-    return enquiries
-      .filter((enquiry) => {
-        if (statusFilter && enquiry.status !== statusFilter) return false;
-        if (!term) return true;
-
-        return (
-          enquiry.name.toLowerCase().includes(term) ||
-          enquiry.email.toLowerCase().includes(term) ||
-          enquiry.phone.toLowerCase().includes(term)
-        );
-      })
-      .sort((a, b) => {
-        const diff =
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        return sort === "newest" ? -diff : diff;
-      });
-  }, [enquiries, search, statusFilter, sort]);
+  // The list arrives already filtered and sorted newest-first from MongoDB.
+  const visible = useMemo(
+    () =>
+      [...enquiries].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+    [enquiries],
+  );
 
   const updateStatus = async (id: string, status: EnquiryStatus) => {
     if (updating) return;
@@ -195,42 +302,136 @@ export default function AdminEnquiries() {
         </p>
       </div>
 
+      {/* ================= STATISTICS ================= */}
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+        {[
+          {
+            label: "Today's Enquiries",
+            value: stats?.today,
+            icon: <CalendarDays size={20} />,
+          },
+          {
+            label: "Last 7 Days",
+            value: stats?.last7Days,
+            icon: <CalendarRange size={20} />,
+          },
+          {
+            label: "Last Month",
+            value: stats?.lastMonth,
+            icon: <CalendarClock size={20} />,
+          },
+          {
+            label: "Total Enquiries",
+            value: stats?.total,
+            icon: <Inbox size={20} />,
+          },
+        ].map((card) => (
+          <div
+            key={card.label}
+            className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-lg transition-all duration-300"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-yellow-100 text-yellow-600 rounded-xl">
+                {card.icon}
+              </div>
+            </div>
+
+            {/* A skeleton rather than a 0, so a loading card never reads as
+                "no enquiries". */}
+            {statsLoading ? (
+              <div className="h-8 w-16 mb-1 rounded-lg bg-gray-200 animate-pulse" />
+            ) : (
+              <h2 className="text-2xl font-bold mb-1">{card.value ?? "—"}</h2>
+            )}
+
+            <p className="text-sm text-gray-500">{card.label}</p>
+          </div>
+        ))}
+      </div>
+
       {/* ================= FILTERS ================= */}
-      <div className="grid md:grid-cols-4 gap-4 mb-8">
-        <div className="relative md:col-span-2">
-          <Search
-            size={16}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-          />
+      <div className="grid gap-4 md:grid-cols-4 mb-2">
+        <div className="md:col-span-2">
+          <label
+            htmlFor="enquiry-search"
+            className="mb-2 block text-xs font-medium text-gray-500"
+          >
+            Search
+          </label>
+          <div className="relative">
+            <Search
+              size={16}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              id="enquiry-search"
+              placeholder="Search by name, email or phone"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full border border-gray-300 focus:border-black focus:ring-2 focus:ring-black rounded-xl py-3 pl-11 pr-4 outline-none"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label
+            htmlFor="enquiry-from"
+            className="mb-2 block text-xs font-medium text-gray-500"
+          >
+            From date
+          </label>
           <input
-            placeholder="Search by name, email or phone"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full border border-gray-300 focus:border-black focus:ring-2 focus:ring-black rounded-xl py-3 pl-11 pr-4 outline-none"
+            id="enquiry-from"
+            type="date"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => setFrom(e.target.value)}
+            className={`w-full border rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-black ${
+              dateError
+                ? "border-red-400"
+                : "border-gray-300 focus:border-black"
+            }`}
           />
         </div>
 
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="border border-gray-300 rounded-xl p-3"
-        >
-          <option value="">All statuses</option>
-          {STATUSES.map((status) => (
-            <option key={status} value={status}>
-              {status}
-            </option>
-          ))}
-        </select>
+        <div>
+          <label
+            htmlFor="enquiry-to"
+            className="mb-2 block text-xs font-medium text-gray-500"
+          >
+            To date
+          </label>
+          <input
+            id="enquiry-to"
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => setTo(e.target.value)}
+            className={`w-full border rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-black ${
+              dateError
+                ? "border-red-400"
+                : "border-gray-300 focus:border-black"
+            }`}
+          />
+        </div>
+      </div>
 
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as "newest" | "oldest")}
-          className="border border-gray-300 rounded-xl p-3"
-        >
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-        </select>
+      <div className="mb-8 flex flex-wrap items-center gap-3 min-h-[24px]">
+        {dateError && (
+          <p role="alert" className="text-sm text-red-600">
+            {dateError}
+          </p>
+        )}
+
+        {hasFilters && (
+          <button
+            onClick={clearFilters}
+            className="flex items-center gap-2 text-sm text-gray-600 transition hover:text-black"
+          >
+            <RotateCcw size={14} />
+            Clear filters
+          </button>
+        )}
       </div>
 
       {/* ================= STATES ================= */}
@@ -248,7 +449,8 @@ export default function AdminEnquiries() {
             Try Again
           </button>
         </div>
-      ) : enquiries.length === 0 ? (
+      ) : visible.length === 0 && !hasFilters && stats?.total === 0 ? (
+        /* Genuinely empty database. */
         <div className="py-20 text-center">
           <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-yellow-100 text-yellow-600 flex items-center justify-center">
             <Inbox size={24} />
@@ -261,8 +463,26 @@ export default function AdminEnquiries() {
           </p>
         </div>
       ) : visible.length === 0 ? (
-        <div className="py-20 text-center text-gray-500">
-          No enquiries match your search.
+        /* Enquiries exist, but this search or date range matches none. */
+        <div className="py-20 text-center">
+          <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-gray-100 text-gray-500 flex items-center justify-center">
+            <Search size={22} />
+          </div>
+          <p className="text-lg font-semibold text-gray-800">
+            No enquiries found
+          </p>
+          <p className="text-gray-500 mt-2 text-sm">
+            Try adjusting your search or date range.
+          </p>
+          {hasFilters && (
+            <button
+              onClick={clearFilters}
+              className="mt-4 inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-black hover:bg-gray-900 text-white text-sm"
+            >
+              <RotateCcw size={14} />
+              Clear filters
+            </button>
+          )}
         </div>
       ) : (
         /* ================= TABLE ================= */
@@ -315,7 +535,7 @@ export default function AdminEnquiries() {
                   </td>
 
                   <td className="px-4 py-4 text-gray-500 whitespace-nowrap">
-                    {formatDate(enquiry.createdAt)}
+                    {formatDate(enquiry.createdAt, stats?.timezone)}
                   </td>
 
                   <td className="px-4 py-4">
@@ -361,7 +581,7 @@ export default function AdminEnquiries() {
                   {selected.name}
                 </h2>
                 <p className="text-gray-500 text-sm mt-1">
-                  Submitted {formatDateTime(selected.createdAt)}
+                  Submitted {formatDateTime(selected.createdAt, stats?.timezone)}
                 </p>
               </div>
 
@@ -378,24 +598,10 @@ export default function AdminEnquiries() {
               <Detail label="Email" value={selected.email} />
               <Detail label="Phone" value={selected.phone} />
               <Detail label="Enquiring About" value={selected.requirement} />
-              <Detail label="Property Type" value={selected.propertyType} />
-              <Detail
-                label="Preferred Location"
-                value={selected.preferredLocation}
-              />
               <Detail
                 label="Last Updated"
-                value={formatDateTime(selected.updatedAt)}
+                value={formatDateTime(selected.updatedAt, stats?.timezone)}
               />
-            </div>
-
-            <div>
-              <p className="text-xs uppercase tracking-wide text-gray-400 mb-2">
-                Message
-              </p>
-              <p className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-gray-700 whitespace-pre-wrap">
-                {selected.message || "No message provided."}
-              </p>
             </div>
 
             {/* STATUS */}
