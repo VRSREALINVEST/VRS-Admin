@@ -239,6 +239,7 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { apiErrorMessage, authHeaders } from "@/lib/adminApi";
 
 interface TeamMember {
   _id: string;
@@ -297,14 +298,14 @@ export default function AdminTeamPage() {
       formData.append("role", role);
       formData.append("image", imageFile);
 
-      await axios.post(`${API}/api/team`, formData);
+      await axios.post(`${API}/api/team`, formData, { headers: authHeaders() });
 
       toast.success("Member added successfully");
 
       resetForm();
       fetchTeam();
-    } catch {
-      toast.error("Failed to add member");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Failed to add member"));
     }
 
     setLoading(false);
@@ -315,11 +316,11 @@ export default function AdminTeamPage() {
     if (!confirm("Are you sure you want to delete this member?")) return;
 
     try {
-      await axios.delete(`${API}/api/team/${id}`);
+      await axios.delete(`${API}/api/team/${id}`, { headers: authHeaders() });
       setMembers((prev) => prev.filter((m) => m._id !== id));
       toast.success("Member deleted");
-    } catch {
-      toast.error("Delete failed");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Delete failed"));
     }
   };
 
@@ -340,7 +341,8 @@ export default function AdminTeamPage() {
 
       await axios.put(
         `${API}/api/team/${editing._id}`,
-        formData
+        formData,
+        { headers: authHeaders() }
       );
 
       toast.success("Member updated");
@@ -348,8 +350,8 @@ export default function AdminTeamPage() {
       setEditing(null);
       resetForm();
       fetchTeam();
-    } catch {
-      toast.error("Update failed");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Update failed"));
     }
 
     setLoading(false);

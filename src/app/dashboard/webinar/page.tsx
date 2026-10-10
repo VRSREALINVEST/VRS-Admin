@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { authHeaders, responseErrorMessage } from "@/lib/adminApi";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -49,11 +50,14 @@ export default function AdminWebinarPage() {
 
       const res = await fetch(`${API}/api/webinars`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        toast.error(await responseErrorMessage(res, "Error creating webinar"));
+        return;
+      }
 
       toast.success("Webinar Created Successfully");
 
@@ -77,9 +81,15 @@ export default function AdminWebinarPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`${API}/api/webinars/${id}`, {
+      const res = await fetch(`${API}/api/webinars/${id}`, {
         method: "DELETE",
+        headers: authHeaders(),
       });
+
+      if (!res.ok) {
+        toast.error(await responseErrorMessage(res, "Error deleting"));
+        return;
+      }
 
       toast.success("Webinar Deleted");
       fetchWebinars();

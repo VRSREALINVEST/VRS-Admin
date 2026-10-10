@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { apiErrorMessage, authHeaders } from "@/lib/adminApi";
 
 interface Testimonial {
   _id: string;
@@ -56,19 +57,23 @@ export default function AdminTextTestimonials() {
     try {
       setLoading(true);
 
-      await axios.post(`${API}/api/text-testimonials`, {
-        name,
-        location,
-        text,
-        rating,
-      });
+      await axios.post(
+        `${API}/api/text-testimonials`,
+        {
+          name,
+          location,
+          text,
+          rating,
+        },
+        { headers: authHeaders() },
+      );
 
       toast.success("Testimonial added");
 
       resetForm();
       fetchTestimonials();
-    } catch {
-      toast.error("Failed to add testimonial");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Failed to add testimonial"));
     }
 
     setLoading(false);
@@ -79,11 +84,13 @@ export default function AdminTextTestimonials() {
     if (!confirm("Are you sure you want to delete this testimonial?")) return;
 
     try {
-      await axios.delete(`${API}/api/text-testimonials/${id}`);
+      await axios.delete(`${API}/api/text-testimonials/${id}`, {
+        headers: authHeaders(),
+      });
       setTestimonials((prev) => prev.filter((t) => t._id !== id));
       toast.success("Deleted successfully");
-    } catch {
-      toast.error("Delete failed");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Delete failed"));
     }
   };
 
@@ -94,20 +101,24 @@ export default function AdminTextTestimonials() {
     try {
       setLoading(true);
 
-      await axios.put(`${API}/api/text-testimonials/${editing._id}`, {
-        name,
-        location,
-        text,
-        rating,
-      });
+      await axios.put(
+        `${API}/api/text-testimonials/${editing._id}`,
+        {
+          name,
+          location,
+          text,
+          rating,
+        },
+        { headers: authHeaders() },
+      );
 
       toast.success("Updated successfully");
 
       setEditing(null);
       resetForm();
       fetchTestimonials();
-    } catch {
-      toast.error("Update failed");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Update failed"));
     }
 
     setLoading(false);

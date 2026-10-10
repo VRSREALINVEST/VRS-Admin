@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { apiErrorMessage, authHeaders } from "@/lib/adminApi";
 
 interface VideoTestimonial {
   _id: string;
@@ -54,18 +55,22 @@ export default function AdminVideoTestimonials() {
     try {
       setLoading(true);
 
-      await axios.post(`${API}/api/video-testimonials`, {
-        name,
-        role,
-        youtubeLink,
-      });
+      await axios.post(
+        `${API}/api/video-testimonials`,
+        {
+          name,
+          role,
+          youtubeLink,
+        },
+        { headers: authHeaders() },
+      );
 
       toast.success("Video testimonial added");
 
       resetForm();
       fetchVideos();
-    } catch {
-      toast.error("Failed to add video testimonial");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Failed to add video testimonial"));
     }
 
     setLoading(false);
@@ -76,11 +81,13 @@ export default function AdminVideoTestimonials() {
       return;
 
     try {
-      await axios.delete(`${API}/api/video-testimonials/${id}`);
+      await axios.delete(`${API}/api/video-testimonials/${id}`, {
+        headers: authHeaders(),
+      });
       setVideos((prev) => prev.filter((v) => v._id !== id));
       toast.success("Deleted successfully");
-    } catch {
-      toast.error("Delete failed");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Delete failed"));
     }
   };
 
@@ -90,19 +97,23 @@ export default function AdminVideoTestimonials() {
     try {
       setLoading(true);
 
-      await axios.put(`${API}/api/video-testimonials/${editing._id}`, {
-        name,
-        role,
-        youtubeLink,
-      });
+      await axios.put(
+        `${API}/api/video-testimonials/${editing._id}`,
+        {
+          name,
+          role,
+          youtubeLink,
+        },
+        { headers: authHeaders() },
+      );
 
       toast.success("Updated successfully");
 
       setEditing(null);
       resetForm();
       fetchVideos();
-    } catch {
-      toast.error("Update failed");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Update failed"));
     }
 
     setLoading(false);

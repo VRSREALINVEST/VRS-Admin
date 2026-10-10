@@ -87,6 +87,7 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { apiErrorMessage, authHeaders } from "@/lib/adminApi";
 
 export default function AdminDiscoverVideo() {
   const API = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -131,7 +132,9 @@ export default function AdminDiscoverVideo() {
         formData.append("thumbnail", thumbnailFile);
       }
 
-      await axios.put(`${API}/api/discover-video`, formData);
+      await axios.put(`${API}/api/discover-video`, formData, {
+        headers: authHeaders(),
+      });
 
       toast.success("Discover section updated successfully");
 
@@ -139,8 +142,8 @@ export default function AdminDiscoverVideo() {
       setThumbnailFile(null);
 
       fetchData();
-    } catch (error) {
-      toast.error("Update failed");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Update failed"));
     }
 
     setLoading(false);

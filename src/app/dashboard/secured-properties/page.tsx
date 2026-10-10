@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { apiErrorMessage, authHeaders } from "@/lib/adminApi";
 
 interface Property {
   _id: string;
@@ -90,6 +91,7 @@ export default function AdminSecuredProperties() {
         await axios.put(
           `${API}/api/secured-properties/${editing._id}`,
           formData,
+          { headers: authHeaders() },
         );
         toast.success("Property updated successfully");
       } else {
@@ -99,14 +101,16 @@ export default function AdminSecuredProperties() {
           return;
         }
 
-        await axios.post(`${API}/api/secured-properties`, formData);
+        await axios.post(`${API}/api/secured-properties`, formData, {
+          headers: authHeaders(),
+        });
         toast.success("Property added successfully");
       }
 
       resetForm();
       fetchData();
-    } catch {
-      toast.error("Operation failed");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Operation failed"));
     }
 
     setLoading(false);
@@ -129,11 +133,13 @@ export default function AdminSecuredProperties() {
     if (!confirm("Delete this property?")) return;
 
     try {
-      await axios.delete(`${API}/api/secured-properties/${id}`);
+      await axios.delete(`${API}/api/secured-properties/${id}`, {
+        headers: authHeaders(),
+      });
       toast.success("Deleted successfully");
       fetchData();
-    } catch {
-      toast.error("Delete failed");
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Delete failed"));
     }
   };
 

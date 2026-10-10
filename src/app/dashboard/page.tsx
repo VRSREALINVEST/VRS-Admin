@@ -12,6 +12,8 @@ import {
   CalendarDays,
   Activity,
 } from "lucide-react";
+import toast from "react-hot-toast";
+import { authHeaders, responseErrorMessage } from "@/lib/adminApi";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -21,7 +23,16 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await fetch(`${API}/api/dashboard/stats`);
+        const res = await fetch(`${API}/api/dashboard/stats`, {
+          headers: authHeaders(),
+        });
+        // An error body (e.g. an expired session) is not stats.
+        if (!res.ok) {
+          toast.error(
+            await responseErrorMessage(res, "Failed to load dashboard stats")
+          );
+          return;
+        }
         const data = await res.json();
         setStats(data);
       } catch (error) {
