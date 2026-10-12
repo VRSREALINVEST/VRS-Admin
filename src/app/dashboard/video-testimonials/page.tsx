@@ -9,9 +9,19 @@ interface VideoTestimonial {
   _id: string;
   name: string;
   role: string;
-  thumbnail: string;
+  thumbnail?: string;
   youtubeLink: string;
 }
+
+// The backend no longer stores uploaded thumbnails: use one if a record still
+// has it, else YouTube's (watch, youtu.be, shorts and embed links).
+const thumbnailFor = ({ thumbnail, youtubeLink }: VideoTestimonial) => {
+  if (thumbnail) return thumbnail;
+  const id = youtubeLink?.match(
+    /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})(?![\w-])/,
+  )?.[1];
+  return id ? `https://i.ytimg.com/vi/${id}/mqdefault.jpg` : undefined;
+};
 
 export default function AdminVideoTestimonials() {
   const API = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -170,10 +180,17 @@ export default function AdminVideoTestimonials() {
               className="bg-gray-50 hover:bg-gray-100 transition p-6 rounded-2xl shadow-sm flex justify-between items-center"
             >
               <div className="flex items-center gap-6">
-                <img
-                  src={video.thumbnail}
-                  className="w-20 h-16 object-cover rounded-xl shadow-md"
-                />
+                {/* Grey box when there is no thumbnail or it fails to load */}
+                <div className="w-20 h-16 rounded-xl shadow-md bg-gray-200 overflow-hidden shrink-0">
+                  <img
+                    src={thumbnailFor(video)}
+                    alt=""
+                    onError={(e) => {
+                      e.currentTarget.hidden = true;
+                    }}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
                 <div>
                   <p className="font-semibold text-lg">{video.name}</p>
                   <p className="text-sm text-gray-500">{video.role}</p>
