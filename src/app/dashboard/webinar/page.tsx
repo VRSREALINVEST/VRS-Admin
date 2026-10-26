@@ -152,15 +152,21 @@ export default function AdminWebinarPage() {
             className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-yellow-400"
           />
 
+          {/* Schedule: optional, because the public webinar page no longer
+              shows dates or times (client requirement). */}
+          <p className="text-sm text-gray-500">
+            Schedule (optional, for your reference only; the website does not
+            show dates or times)
+          </p>
+
           {/* Day */}
           <select
             name="day"
             value={form.day}
             onChange={handleChange}
-            required
             className="w-full border border-gray-300 p-3 rounded-lg"
           >
-            <option value="">Select Day</option>
+            <option value="">Day (optional)</option>
             <option>Monday</option>
             <option>Tuesday</option>
             <option>Wednesday</option>
@@ -174,9 +180,9 @@ export default function AdminWebinarPage() {
           <input
             type="time"
             name="time"
+            aria-label="Time (optional)"
             value={form.time}
             onChange={handleChange}
-            required
             className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-yellow-400"
           />
 
@@ -185,10 +191,9 @@ export default function AdminWebinarPage() {
             name="australiaTimeZone"
             value={form.australiaTimeZone}
             onChange={handleChange}
-            required
             className="w-full border border-gray-300 p-3 rounded-lg"
           >
-            <option value="">Select Time Zone</option>
+            <option value="">Time zone (optional)</option>
 
             {TIMEZONES.map((tz) => (
               <option key={tz.value} value={tz.value}>
@@ -239,10 +244,13 @@ export default function AdminWebinarPage() {
                 <strong>Title:</strong> {webinar.title}
               </p>
 
-              <p>
-                <strong>Schedule:</strong>{" "}
-                {webinar.day} • {webinar.time} {webinar.australiaTimeZone}
-              </p>
+              {(webinar.day || webinar.time) && (
+                <p>
+                  <strong>Schedule:</strong>{" "}
+                  {[webinar.day, webinar.time].filter(Boolean).join(" • ")}{" "}
+                  {webinar.australiaTimeZone}
+                </p>
+              )}
 
               <div className="mt-4">
                 <button

@@ -75,6 +75,22 @@ const zonedDay = (value: string, timeZone: string = APP_TIMEZONE) => {
   }).format(date);
 };
 
+// Consent is only stored on enquiries from the /strategy-session form; older
+// ones have none, and Detail shows "—", so "never asked" never reads as "No".
+const yesNo = (value?: boolean) =>
+  value === undefined ? undefined : value ? "Yes" : "No";
+
+const SOURCE_LABELS: Record<string, string> = {
+  "strategy-session": "Strategy session form",
+};
+
+// Campaign attribution belongs in the details view, not in a table column.
+const formatUtm = (utm: Enquiry["utm"]) =>
+  Object.entries(utm ?? {})
+    .filter(([, value]) => value)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(" · ") || undefined;
+
 export default function AdminEnquiries() {
   const API = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -594,7 +610,7 @@ export default function AdminEnquiries() {
       {selected && (
         <div
           onClick={() => setSelected(null)}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center-safe justify-center z-50 p-4 overflow-y-auto"
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -627,6 +643,30 @@ export default function AdminEnquiries() {
                 label="Last Updated"
                 value={formatDateTime(selected.updatedAt, stats?.timezone)}
               />
+            </div>
+
+            {/* Strategy-session form fields; "—" on older enquiries. */}
+            <div className="grid sm:grid-cols-2 gap-5 text-sm border-t border-gray-100 pt-6">
+              <Detail label="First Name" value={selected.firstName} />
+              <Detail label="Last Name" value={selected.lastName} />
+              <Detail label="State" value={selected.state} />
+              <Detail label="Buying Timeframe" value={selected.timing} />
+              <Detail
+                label="Contact Consent"
+                value={yesNo(selected.contactConsent)}
+              />
+              <Detail
+                label="Marketing Consent"
+                value={yesNo(selected.marketingConsent)}
+              />
+              <Detail
+                label="Source"
+                value={
+                  selected.source &&
+                  (SOURCE_LABELS[selected.source] ?? selected.source)
+                }
+              />
+              <Detail label="Campaign (UTM)" value={formatUtm(selected.utm)} />
             </div>
 
             {/* STATUS */}

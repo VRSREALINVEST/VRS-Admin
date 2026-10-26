@@ -24,6 +24,21 @@ export interface Enquiry {
   propertyType?: string;
   preferredLocation?: string;
   message?: string;
+  // Sent by the /strategy-session form; enquiries saved before it have none.
+  firstName?: string;
+  lastName?: string;
+  state?: string;
+  timing?: string;
+  contactConsent?: boolean;
+  marketingConsent?: boolean;
+  utm?: {
+    source?: string;
+    medium?: string;
+    campaign?: string;
+    term?: string;
+    content?: string;
+  };
+  source?: string;
   status: EnquiryStatus;
   createdAt: string;
   updatedAt: string;
