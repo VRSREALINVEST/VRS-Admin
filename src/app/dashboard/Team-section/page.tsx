@@ -298,6 +298,7 @@ export default function AdminTeamPage() {
       formData.append("role", role);
       formData.append("image", imageFile);
 
+      
       await axios.post(`${API}/api/team`, formData, { headers: authHeaders() });
 
       toast.success("Member added successfully");
